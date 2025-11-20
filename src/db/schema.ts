@@ -121,3 +121,184 @@ export const counselorNotes = sqliteTable('counselor_notes', {
   isImportant: integer('is_important', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull(),
 });
+
+// New courses table with code field
+export const coursesNew = sqliteTable('courses_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  code: text('code').notNull().unique(),
+  description: text('description'),
+  durationMonths: integer('duration_months'),
+  feeAmount: text('fee_amount'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// New leads table with enhanced fields
+export const leadsNew = sqliteTable('leads_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  email: text('email'),
+  phone: text('phone').notNull(),
+  whatsappNumber: text('whatsapp_number'),
+  leadSource: text('lead_source').notNull(),
+  leadStage: text('lead_stage').notNull().default('new'),
+  leadStatus: text('lead_status').notNull().default('active'),
+  courseInterestId: integer('course_interest_id').references(() => coursesNew.id),
+  assignedTelecallerId: integer('assigned_telecaller_id').references(() => users.id),
+  assignedCounselorId: integer('assigned_counselor_id').references(() => users.id),
+  city: text('city'),
+  state: text('state'),
+  country: text('country'),
+  educationLevel: text('education_level'),
+  currentOccupation: text('current_occupation'),
+  conversionDate: text('conversion_date'),
+  lostReason: text('lost_reason'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// New call logs table with enhanced fields
+export const callLogsNew = sqliteTable('call_logs_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  leadId: integer('lead_id').notNull().references(() => leadsNew.id),
+  callerId: integer('caller_id').notNull().references(() => users.id),
+  callDate: text('call_date').notNull(),
+  callDurationSeconds: integer('call_duration_seconds'),
+  callOutcome: text('call_outcome').notNull(),
+  nextFollowupDate: text('next_followup_date'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull(),
+});
+
+// New counselor notes table
+export const counselorNotesNew = sqliteTable('counselor_notes_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  leadId: integer('lead_id').notNull().references(() => leadsNew.id),
+  counselorId: integer('counselor_id').notNull().references(() => users.id),
+  noteType: text('note_type').notNull(),
+  content: text('content').notNull(),
+  isImportant: integer('is_important', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull(),
+});
+
+// New custom fields table
+export const customFieldsNew = sqliteTable('custom_fields_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  fieldName: text('field_name').notNull(),
+  fieldLabel: text('field_label').notNull(),
+  fieldType: text('field_type').notNull(),
+  entityType: text('entity_type').notNull(),
+  isRequired: integer('is_required', { mode: 'boolean' }).notNull().default(false),
+  isVisible: integer('is_visible', { mode: 'boolean' }).notNull().default(true),
+  displayOrder: integer('display_order').default(0),
+  validationRules: text('validation_rules', { mode: 'json' }),
+  dropdownOptions: text('dropdown_options', { mode: 'json' }),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// New dropdown master table
+export const dropdownMasterNew = sqliteTable('dropdown_master_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category: text('category').notNull(),
+  value: text('value').notNull(),
+  label: text('label').notNull(),
+  displayOrder: integer('display_order').default(0),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull(),
+});
+
+// New import jobs table
+export const importJobsNew = sqliteTable('import_jobs_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  importedById: integer('imported_by_id').notNull().references(() => users.id),
+  fileName: text('file_name').notNull(),
+  totalRecords: integer('total_records').default(0),
+  successCount: integer('success_count').default(0),
+  errorCount: integer('error_count').default(0),
+  status: text('status').notNull().default('pending'),
+  errorLog: text('error_log', { mode: 'json' }),
+  createdAt: text('created_at').notNull(),
+  completedAt: text('completed_at'),
+});
+
+// New export jobs table
+export const exportJobsNew = sqliteTable('export_jobs_new', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  exportedById: integer('exported_by_id').notNull().references(() => users.id),
+  entityType: text('entity_type').notNull(),
+  filters: text('filters', { mode: 'json' }),
+  fileUrl: text('file_url'),
+  status: text('status').notNull().default('pending'),
+  createdAt: text('created_at').notNull(),
+  completedAt: text('completed_at'),
+});
+
+
+// Auth tables for better-auth
+export const user = sqliteTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: integer("email_verified", { mode: "boolean" })
+    .$defaultFn(() => false)
+    .notNull(),
+  image: text("image"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date())
+    .notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .$defaultFn(() => new Date())
+    .notNull(),
+});
+
+export const session = sqliteTable("session", {
+  id: text("id").primaryKey(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const account = sqliteTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: integer("access_token_expires_at", {
+    mode: "timestamp",
+  }),
+  refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+    mode: "timestamp",
+  }),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const verification = sqliteTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+});

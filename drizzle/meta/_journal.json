@@ -8,6 +8,20 @@
       "when": 1763650467625,
       "tag": "0000_flat_sleepwalker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1763656728188,
+      "tag": "0001_nifty_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1763657107615,
+      "tag": "0002_parallel_fixer",
+      "breakpoints": true
     }
   ]
 }

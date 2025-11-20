@@ -1,20 +1,68 @@
+"use client";
+
 import Link from "next/link";
-import { Phone, Users, TrendingUp, FileSpreadsheet } from "lucide-react";
+import { Phone, Users, TrendingUp, FileSpreadsheet, LogOut } from "lucide-react";
+import { useSession, authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    const token = localStorage.getItem("bearer_token");
+    const { error } = await authClient.signOut({
+      fetchOptions: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+    
+    if (!error) {
+      localStorage.removeItem("bearer_token");
+      router.push("/");
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <h1 className="text-xl font-bold">Ed-Tech CRM</h1>
-          <nav className="flex gap-4">
-            <Link
-              href="/login"
-              className="rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
-            >
-              Login
-            </Link>
+          <nav className="flex gap-4 items-center">
+            {isPending ? (
+              <div className="h-8 w-20 animate-pulse rounded bg-muted" />
+            ) : session?.user ? (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {session.user.name}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </Button>
+                <Link href="/dashboard">
+                  <Button size="sm">
+                    Dashboard
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
+              >
+                Login
+              </Link>
+            )}
           </nav>
         </div>
       </header>
@@ -30,18 +78,26 @@ export default function Home() {
             and sales tracking. Built for educational institutions.
           </p>
           <div className="flex justify-center gap-4">
-            <Link
-              href="/login"
-              className="rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Get Started
-            </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-lg border border-border bg-card px-6 py-3 text-sm font-medium text-foreground hover:bg-accent"
-            >
-              View Dashboard
-            </Link>
+            {session?.user ? (
+              <Link href="/dashboard">
+                <Button size="lg">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/register">
+                  <Button size="lg">
+                    Get Started
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button variant="outline" size="lg">
+                    Sign In
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </section>
 
