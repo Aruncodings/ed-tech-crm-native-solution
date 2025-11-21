@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Phone, Users, TrendingUp, FileSpreadsheet, LogOut, Shield } from "lucide-react";
+import { Phone, Users, TrendingUp, FileSpreadsheet, LogOut, Shield, BookOpen } from "lucide-react";
 import { useSession, authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -64,7 +64,7 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-card sticky top-0 z-50">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold">Ed-Tech CRM</h1>
@@ -102,12 +102,20 @@ export default function Home() {
                 </Link>
               </>
             ) : (
-              <Link
-                href="/login"
-                className="rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
-              >
-                Login
-              </Link>
+              <>
+                <Link href="/setup-guide">
+                  <Button variant="ghost" size="sm">
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    Setup Guide
+                  </Button>
+                </Link>
+                <Link
+                  href="/login"
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
+                >
+                  Login
+                </Link>
+              </>
             )}
           </nav>
         </div>
@@ -121,7 +129,7 @@ export default function Home() {
           </h2>
           <p className="mx-auto mb-8 max-w-2xl text-lg text-muted-foreground">
             Complete cloud-based solution for managing leads, telecaller workflows, 
-            and sales tracking. Built for educational institutions.
+            and sales tracking. Built for educational institutions with enterprise-grade security.
           </p>
           <div className="flex justify-center gap-4">
             {session?.user ? (
@@ -145,6 +153,29 @@ export default function Home() {
               </>
             )}
           </div>
+          
+          {/* Approval Notice for New Users */}
+          {!session?.user && (
+            <div className="mt-6 mx-auto max-w-2xl">
+              <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Shield className="h-5 w-5 text-purple-600" />
+                  <p className="font-semibold text-purple-800 dark:text-purple-200">
+                    First Time Setup Required
+                  </p>
+                </div>
+                <p className="text-sm text-purple-700 dark:text-purple-300 mb-3">
+                  All accounts require Super Admin approval. First-time users need to set up a Super Admin account.
+                </p>
+                <Link href="/setup-guide">
+                  <Button size="sm" variant="outline" className="border-purple-500/30 text-purple-700 hover:bg-purple-500/10">
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    View Setup Guide
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Features Grid */}
@@ -185,34 +216,52 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Role-Based Access */}
+        {/* Role-Based Access with Super Admin Highlight */}
         <section className="bg-muted/50 py-16">
           <div className="container mx-auto px-4">
-            <h3 className="mb-8 text-center text-3xl font-bold">Built for Your Team</h3>
-            <div className="grid gap-6 md:grid-cols-4">
-              <div className="rounded-lg bg-card p-6 text-center border-2 border-purple-500/20">
-                <Shield className="h-8 w-8 text-purple-600 mx-auto mb-3" />
-                <h4 className="mb-2 text-lg font-semibold">Super Admin</h4>
+            <h3 className="mb-4 text-center text-3xl font-bold">Role-Based Access Control</h3>
+            <p className="mb-8 text-center text-muted-foreground max-w-2xl mx-auto">
+              Secure workspace with approval workflow ensuring only authorized users access the system
+            </p>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+              <div className="rounded-lg bg-card p-6 text-center border-2 border-purple-500/30 shadow-lg shadow-purple-500/10">
+                <Shield className="h-10 w-10 text-purple-600 mx-auto mb-3" />
+                <h4 className="mb-2 text-lg font-semibold text-purple-600">Super Admin</h4>
+                <p className="text-sm text-muted-foreground mb-2">
+                  System gatekeeper with complete control
+                </p>
+                <ul className="text-xs text-left text-muted-foreground space-y-1 mt-3">
+                  <li>✅ Approve/reject users</li>
+                  <li>✅ Manage all permissions</li>
+                  <li>✅ Full system access</li>
+                </ul>
+              </div>
+              <div className="rounded-lg bg-card p-6 text-center border">
+                <Users className="h-8 w-8 text-blue-600 mx-auto mb-3" />
+                <h4 className="mb-2 text-lg font-semibold">Admin</h4>
                 <p className="text-sm text-muted-foreground">
-                  Approve users and manage complete system access
+                  Operations manager with full analytics and reporting
                 </p>
               </div>
-              <div className="rounded-lg bg-card p-6 text-center">
+              <div className="rounded-lg bg-card p-6 text-center border">
+                <Phone className="h-8 w-8 text-green-600 mx-auto mb-3" />
                 <h4 className="mb-2 text-lg font-semibold">Telecallers</h4>
                 <p className="text-sm text-muted-foreground">
-                  Focused interface for making calls and updating lead status
+                  Focused interface for calls and lead updates
                 </p>
               </div>
-              <div className="rounded-lg bg-card p-6 text-center">
+              <div className="rounded-lg bg-card p-6 text-center border">
+                <Users className="h-8 w-8 text-orange-600 mx-auto mb-3" />
                 <h4 className="mb-2 text-lg font-semibold">Counselors</h4>
                 <p className="text-sm text-muted-foreground">
-                  Track conversions and manage student enrollments
+                  Track conversions and student enrollments
                 </p>
               </div>
-              <div className="rounded-lg bg-card p-6 text-center">
-                <h4 className="mb-2 text-lg font-semibold">Admins</h4>
+              <div className="rounded-lg bg-card p-6 text-center border">
+                <FileSpreadsheet className="h-8 w-8 text-gray-600 mx-auto mb-3" />
+                <h4 className="mb-2 text-lg font-semibold">Auditors</h4>
                 <p className="text-sm text-muted-foreground">
-                  Complete system control with analytics and reporting
+                  Read-only access for compliance
                 </p>
               </div>
             </div>
