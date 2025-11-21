@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const role = searchParams.get('role');
     const isActiveParam = searchParams.get('isActive');
+    const isApprovedParam = searchParams.get('isApproved');
+    const authUserId = searchParams.get('authUserId');
 
     let query = db.select().from(users);
 
@@ -80,6 +82,17 @@ export async function GET(request: NextRequest) {
     if (isActiveParam !== null) {
       const isActive = isActiveParam === 'true';
       conditions.push(eq(users.isActive, isActive));
+    }
+
+    // isApproved filter
+    if (isApprovedParam !== null) {
+      const isApproved = isApprovedParam === 'true';
+      conditions.push(eq(users.isApproved, isApproved));
+    }
+
+    // authUserId filter
+    if (authUserId) {
+      conditions.push(eq(users.authUserId, authUserId.trim()));
     }
 
     // Apply conditions

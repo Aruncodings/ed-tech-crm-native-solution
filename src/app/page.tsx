@@ -1,14 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { Phone, Users, TrendingUp, FileSpreadsheet, LogOut } from "lucide-react";
+import { Phone, Users, TrendingUp, FileSpreadsheet, LogOut, Shield } from "lucide-react";
 import { useSession, authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 export default function Home() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (session?.user?.email) {
+      // Fetch user role
+      fetch(`/api/users?search=${encodeURIComponent(session.user.email)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.length > 0) {
+            setUserRole(data[0].role);
+          }
+        });
+    }
+  }, [session]);
 
   const handleSignOut = async () => {
     const token = localStorage.getItem("bearer_token");
@@ -27,12 +42,38 @@ export default function Home() {
     }
   };
 
+  const getDashboardLink = () => {
+    if (!userRole) return "/dashboard";
+    
+    switch (userRole) {
+      case "super_admin":
+        return "/super-admin";
+      case "admin":
+        return "/admin";
+      case "telecaller":
+        return "/telecaller";
+      case "counselor":
+        return "/counselor";
+      case "auditor":
+        return "/auditor";
+      default:
+        return "/dashboard";
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <h1 className="text-xl font-bold">Ed-Tech CRM</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">Ed-Tech CRM</h1>
+            {userRole === "super_admin" && (
+              <div className="flex h-6 w-6 items-center justify-center rounded bg-purple-500/10">
+                <Shield className="h-4 w-4 text-purple-600" />
+              </div>
+            )}
+          </div>
           <nav className="flex gap-4 items-center">
             {isPending ? (
               <div className="h-8 w-20 animate-pulse rounded bg-muted" />
@@ -41,6 +82,11 @@ export default function Home() {
                 <span className="text-sm text-muted-foreground">
                   {session.user.name}
                 </span>
+                {userRole && (
+                  <span className="text-xs px-2 py-1 bg-muted rounded capitalize">
+                    {userRole.replace(/_/g, " ")}
+                  </span>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -49,7 +95,7 @@ export default function Home() {
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout
                 </Button>
-                <Link href="/dashboard">
+                <Link href={getDashboardLink()}>
                   <Button size="sm">
                     Dashboard
                   </Button>
@@ -79,7 +125,7 @@ export default function Home() {
           </p>
           <div className="flex justify-center gap-4">
             {session?.user ? (
-              <Link href="/dashboard">
+              <Link href={getDashboardLink()}>
                 <Button size="lg">
                   Go to Dashboard
                 </Button>
@@ -143,7 +189,14 @@ export default function Home() {
         <section className="bg-muted/50 py-16">
           <div className="container mx-auto px-4">
             <h3 className="mb-8 text-center text-3xl font-bold">Built for Your Team</h3>
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-4">
+              <div className="rounded-lg bg-card p-6 text-center border-2 border-purple-500/20">
+                <Shield className="h-8 w-8 text-purple-600 mx-auto mb-3" />
+                <h4 className="mb-2 text-lg font-semibold">Super Admin</h4>
+                <p className="text-sm text-muted-foreground">
+                  Approve users and manage complete system access
+                </p>
+              </div>
               <div className="rounded-lg bg-card p-6 text-center">
                 <h4 className="mb-2 text-lg font-semibold">Telecallers</h4>
                 <p className="text-sm text-muted-foreground">

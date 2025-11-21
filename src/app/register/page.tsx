@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, UserPlus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, UserPlus, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 
 type ErrorTypes = Partial<Record<keyof typeof authClient.$ERROR_CODES, string>>;
 
@@ -29,14 +31,22 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState<string>("");
+  const [phone, setPhone] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
     // Validation
+    if (!role) {
+      setError("Please select a role");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -50,7 +60,8 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const { error: authError } = await authClient.signUp.email({
+      // Step 1: Create auth user
+      const { data: authData, error: authError } = await authClient.signUp.email({
         email,
         name,
         password,
@@ -62,16 +73,87 @@ export default function RegisterPage() {
         return;
       }
 
-      // Redirect to login page with success message
-      router.push("/login?registered=true");
+      // Step 2: Create user in users table with isApproved=false
+      const userResponse = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          name: name.trim(),
+          role: role,
+          phone: phone.trim() || null,
+          isActive: true,
+        }),
+      });
+
+      if (!userResponse.ok) {
+        const errorData = await userResponse.json();
+        setError(errorData.error || "Failed to create user profile");
+        setIsLoading(false);
+        return;
+      }
+
+      const userData = await userResponse.json();
+
+      // Step 3: Link the auth user to the users table
+      if (authData?.user?.id && userData?.id) {
+        await fetch(`/api/users?id=${userData.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            authUserId: authData.user.id,
+          }),
+        });
+      }
+
+      // Show success message
+      setSuccess(true);
+      toast.success("Registration successful! Please wait for admin approval.");
+      
+      // Redirect to login after 3 seconds
+      setTimeout(() => {
+        router.push("/login?registered=true");
+      }, 3000);
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
       setIsLoading(false);
     }
   };
 
+  if (success) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <div className="flex items-center justify-center mb-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+                <CheckCircle2 className="h-10 w-10 text-green-600" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl text-center">Registration Pending</CardTitle>
+            <CardDescription className="text-center">
+              Your account has been created successfully!
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-4 text-sm text-blue-700 dark:text-blue-300">
+              <p className="font-medium mb-2">⏳ Awaiting Admin Approval</p>
+              <p>
+                Your registration is pending approval from the Super Admin. 
+                You will be able to log in once your account has been approved.
+              </p>
+            </div>
+            <p className="text-center text-sm text-muted-foreground">
+              Redirecting to login page...
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
@@ -117,6 +199,37 @@ export default function RegisterPage() {
                 required
                 disabled={isLoading}
                 autoComplete="email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={role} onValueChange={setRole} disabled={isLoading} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="telecaller">Telecaller</SelectItem>
+                  <SelectItem value="counselor">Counselor</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="auditor">Auditor</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose your role in the organization
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number (Optional)</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={isLoading}
+                autoComplete="tel"
               />
             </div>
 

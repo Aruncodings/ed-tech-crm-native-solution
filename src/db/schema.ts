@@ -8,6 +8,8 @@ export const users = sqliteTable('users', {
   role: text('role').notNull(), // 'super_admin', 'admin', 'telecaller', 'counselor', 'auditor'
   phone: text('phone'),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  isApproved: integer('is_approved', { mode: 'boolean' }).notNull().default(false),
+  authUserId: text('auth_user_id'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

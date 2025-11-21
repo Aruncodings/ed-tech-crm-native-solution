@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, LogIn } from "lucide-react";
+import { Loader2, LogIn, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (searchParams.get("registered") === "true") {
+      toast.info("Registration successful! Please wait for admin approval before logging in.");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,11 +33,11 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const { error: authError } = await authClient.signIn.email({
+      // Step 1: Sign in with better-auth
+      const { data, error: authError } = await authClient.signIn.email({
         email,
         password,
         rememberMe,
-        callbackURL: "/dashboard"
       });
 
       if (authError) {
@@ -38,8 +46,76 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect to dashboard
-      router.push("/dashboard");
+      // Step 2: Check if user is approved
+      const userResponse = await fetch(`/api/users?search=${encodeURIComponent(email.toLowerCase().trim())}`);
+      
+      if (!userResponse.ok) {
+        setError("Failed to verify user status. Please try again.");
+        setIsLoading(false);
+        // Sign out the user
+        await authClient.signOut();
+        return;
+      }
+
+      const users = await userResponse.json();
+      
+      if (!users || users.length === 0) {
+        setError("User profile not found. Please contact support.");
+        setIsLoading(false);
+        await authClient.signOut();
+        return;
+      }
+
+      const user = users[0];
+
+      // Step 3: Check if user is approved
+      if (!user.isApproved) {
+        setError("");
+        toast.error("Your account is pending approval from the Super Admin. Please wait for approval before logging in.");
+        setIsLoading(false);
+        // Sign out the user
+        await authClient.signOut();
+        localStorage.removeItem("bearer_token");
+        return;
+      }
+
+      // Step 4: Check if user is active
+      if (!user.isActive) {
+        setError("Your account has been deactivated. Please contact support.");
+        setIsLoading(false);
+        await authClient.signOut();
+        localStorage.removeItem("bearer_token");
+        return;
+      }
+
+      // Success! Redirect based on role
+      toast.success("Login successful!");
+      
+      const redirect = searchParams.get("redirect");
+      if (redirect) {
+        router.push(redirect);
+      } else {
+        // Redirect based on role
+        switch (user.role) {
+          case "super_admin":
+            router.push("/super-admin");
+            break;
+          case "admin":
+            router.push("/admin");
+            break;
+          case "telecaller":
+            router.push("/telecaller");
+            break;
+          case "counselor":
+            router.push("/counselor");
+            break;
+          case "auditor":
+            router.push("/auditor");
+            break;
+          default:
+            router.push("/dashboard");
+        }
+      }
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
       setIsLoading(false);
@@ -63,8 +139,9 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
               </div>
             )}
             
