@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useSession, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, LogOut, Users, Phone, TrendingUp, Award, UserPlus, FileSpreadsheet, Settings } from "lucide-react";
+import { Loader2, LogOut, Users, Phone, TrendingUp, Award, UserPlus, FileSpreadsheet, Settings, List } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Link from "next/link";
 
 interface Stats {
   total_leads: number;
@@ -369,22 +370,34 @@ export default function AdminPage() {
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common administrative tasks</CardDescription>
+            <CardDescription>Manage your CRM system</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              <Button variant="outline" className="justify-start">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add New User
-              </Button>
-              <Button variant="outline" className="justify-start">
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                Import Leads
-              </Button>
-              <Button variant="outline" className="justify-start">
-                <Settings className="mr-2 h-4 w-4" />
-                System Settings
-              </Button>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <Link href="/admin/leads">
+                <Button variant="outline" className="w-full justify-start">
+                  <List className="mr-2 h-4 w-4" />
+                  Manage Leads
+                </Button>
+              </Link>
+              <Link href="/admin/courses">
+                <Button variant="outline" className="w-full justify-start">
+                  <Award className="mr-2 h-4 w-4" />
+                  Manage Courses
+                </Button>
+              </Link>
+              <Link href="/admin/users">
+                <Button variant="outline" className="w-full justify-start">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Manage Users
+                </Button>
+              </Link>
+              <Link href="/super-admin">
+                <Button variant="outline" className="w-full justify-start">
+                  <Settings className="mr-2 h-4 w-4" />
+                  System Settings
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
