@@ -51,11 +51,25 @@ interface LeadDialogProps {
   onSuccess: () => void;
 }
 
+interface DropdownOption {
+  id: number;
+  category: string;
+  value: string;
+  label: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
 export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [telecallers, setTelecallers] = useState<User[]>([]);
   const [counselors, setCounselors] = useState<User[]>([]);
+  
+  const [leadSourceOptions, setLeadSourceOptions] = useState<DropdownOption[]>([]);
+  const [leadStageOptions, setLeadStageOptions] = useState<DropdownOption[]>([]);
+  const [leadStatusOptions, setLeadStatusOptions] = useState<DropdownOption[]>([]);
+  const [educationLevelOptions, setEducationLevelOptions] = useState<DropdownOption[]>([]);
   
   const [duplicateWarning, setDuplicateWarning] = useState<any>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
@@ -83,6 +97,7 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
     if (open) {
       fetchCourses();
       fetchUsers();
+      fetchDropdownOptions();
       setDuplicateWarning(null);
       setShowDuplicateWarning(false);
       if (lead) {
@@ -132,6 +147,32 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
       ));
     } catch (error) {
       console.error("Error fetching users:", error);
+    }
+  };
+
+  const fetchDropdownOptions = async () => {
+    try {
+      const [sourceRes, stageRes, statusRes, educationRes] = await Promise.all([
+        fetch("/api/dropdown-master-new?category=lead_source&isActive=true&limit=100"),
+        fetch("/api/dropdown-master-new?category=lead_stage&isActive=true&limit=100"),
+        fetch("/api/dropdown-master-new?category=lead_status&isActive=true&limit=100"),
+        fetch("/api/dropdown-master-new?category=education_level&isActive=true&limit=100"),
+      ]);
+
+      const [sourceData, stageData, statusData, educationData] = await Promise.all([
+        sourceRes.json(),
+        stageRes.json(),
+        statusRes.json(),
+        educationRes.json(),
+      ]);
+
+      setLeadSourceOptions(sourceData);
+      setLeadStageOptions(stageData);
+      setLeadStatusOptions(statusData);
+      setEducationLevelOptions(educationData);
+    } catch (error) {
+      console.error("Error fetching dropdown options:", error);
+      toast.error("Failed to load dropdown options");
     }
   };
 
@@ -280,12 +321,11 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="website">Website</SelectItem>
-                    <SelectItem value="referral">Referral</SelectItem>
-                    <SelectItem value="social_media">Social Media</SelectItem>
-                    <SelectItem value="advertisement">Advertisement</SelectItem>
-                    <SelectItem value="direct">Direct</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    {leadSourceOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -300,14 +340,11 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="contacted">Contacted</SelectItem>
-                    <SelectItem value="qualified">Qualified</SelectItem>
-                    <SelectItem value="demo_scheduled">Demo Scheduled</SelectItem>
-                    <SelectItem value="proposal_sent">Proposal Sent</SelectItem>
-                    <SelectItem value="negotiation">Negotiation</SelectItem>
-                    <SelectItem value="converted">Converted</SelectItem>
-                    <SelectItem value="lost">Lost</SelectItem>
+                    {leadStageOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -322,9 +359,11 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="junk">Junk</SelectItem>
+                    {leadStatusOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -434,12 +473,11 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Not specified</SelectItem>
-                    <SelectItem value="high_school">High School</SelectItem>
-                    <SelectItem value="bachelors">Bachelor's Degree</SelectItem>
-                    <SelectItem value="masters">Master's Degree</SelectItem>
-                    <SelectItem value="phd">PhD</SelectItem>
-                    <SelectItem value="diploma">Diploma</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    {educationLevelOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
