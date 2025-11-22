@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { leadsNew } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import Papa from "papaparse";
 
 export async function POST(request: NextRequest) {
@@ -24,7 +25,9 @@ export async function POST(request: NextRequest) {
         complete: async (results) => {
           let successCount = 0;
           let errorCount = 0;
+          let duplicateCount = 0;
           const errors: string[] = [];
+          const duplicates: string[] = [];
 
           for (const [index, row] of results.data.entries()) {
             try {
@@ -37,10 +40,23 @@ export async function POST(request: NextRequest) {
                 continue;
               }
 
+              // ✅ CRITICAL FIX: Check for duplicate phone number
+              const cleanPhone = data.phone.trim();
+              const existingLead = await db.select()
+                .from(leadsNew)
+                .where(eq(leadsNew.phone, cleanPhone))
+                .limit(1);
+
+              if (existingLead.length > 0) {
+                duplicateCount++;
+                duplicates.push(`Row ${index + 2}: Phone ${cleanPhone} already exists (Lead: ${existingLead[0].name}, ID: ${existingLead[0].id})`);
+                continue;
+              }
+
               // Prepare lead data
               const leadData = {
                 name: data.name,
-                phone: data.phone,
+                phone: cleanPhone,
                 email: data.email || null,
                 whatsappNumber: data.whatsappNumber || null,
                 leadSource: data.leadSource,
@@ -72,7 +88,9 @@ export async function POST(request: NextRequest) {
               message: "Import completed",
               successCount,
               errorCount,
+              duplicateCount,
               errors: errors.slice(0, 10), // Return first 10 errors
+              duplicates: duplicates.slice(0, 10), // Return first 10 duplicates
             })
           );
         },

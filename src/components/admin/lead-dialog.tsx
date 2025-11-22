@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Lead {
   id?: number;
@@ -55,6 +56,9 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
   const [courses, setCourses] = useState<Course[]>([]);
   const [telecallers, setTelecallers] = useState<User[]>([]);
   const [counselors, setCounselors] = useState<User[]>([]);
+  
+  const [duplicateWarning, setDuplicateWarning] = useState<any>(null);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
 
   const [formData, setFormData] = useState<Lead>({
     name: "",
@@ -79,6 +83,8 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
     if (open) {
       fetchCourses();
       fetchUsers();
+      setDuplicateWarning(null);
+      setShowDuplicateWarning(false);
       if (lead) {
         setFormData(lead);
       } else {
@@ -149,13 +155,24 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
         body: JSON.stringify(formData),
       });
 
+      if (response.status === 409) {
+        const errorData = await response.json();
+        if (errorData.code === "DUPLICATE_PHONE") {
+          setDuplicateWarning(errorData.existingLead);
+          setShowDuplicateWarning(true);
+          toast.error("Mobile number already exists");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       if (response.ok) {
         toast.success(lead ? "Lead updated successfully" : "Lead created successfully");
         onOpenChange(false);
         onSuccess();
       } else {
         const error = await response.json();
-        toast.error(error.message || "Failed to save lead");
+        toast.error(error.error || error.message || "Failed to save lead");
       }
     } catch (error) {
       toast.error("An error occurred while saving the lead");
@@ -174,6 +191,39 @@ export function LeadDialog({ open, onOpenChange, lead, onSuccess }: LeadDialogPr
             {lead ? "Update lead information and assignment" : "Add a new lead to the system"}
           </DialogDescription>
         </DialogHeader>
+        
+        {showDuplicateWarning && duplicateWarning && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="font-semibold mb-1">Duplicate Mobile Number Detected!</div>
+              <div className="text-sm space-y-1">
+                <div>This phone number already exists for:</div>
+                <div className="mt-2 p-2 bg-background/50 rounded">
+                  <div><strong>Name:</strong> {duplicateWarning.name}</div>
+                  <div><strong>Email:</strong> {duplicateWarning.email || "N/A"}</div>
+                  <div><strong>Stage:</strong> {duplicateWarning.leadStage?.replace(/_/g, " ")}</div>
+                  <div><strong>Status:</strong> {duplicateWarning.leadStatus}</div>
+                  <div><strong>Lead ID:</strong> {duplicateWarning.id}</div>
+                </div>
+                <div className="mt-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setShowDuplicateWarning(false);
+                      setDuplicateWarning(null);
+                    }}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             {/* Basic Information */}

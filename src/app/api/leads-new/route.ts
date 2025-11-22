@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { leadsNew } from '@/db/schema';
+import { leadsNew, users } from '@/db/schema';
 import { eq, like, or, and } from 'drizzle-orm';
+import { headers } from 'next/headers';
+import { auth } from '@/lib/auth';
 
 const VALID_LEAD_SOURCES = ['website', 'referral', 'social_media', 'advertisement', 'walk_in', 'other'];
 const VALID_LEAD_STAGES = ['new', 'contacted', 'qualified', 'demo_scheduled', 'proposal_sent', 'negotiation', 'converted', 'lost'];
@@ -10,6 +12,23 @@ const VALID_LEAD_STATUSES = ['active', 'inactive', 'junk'];
 function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
+}
+
+async function getUserRole(request: NextRequest): Promise<string | null> {
+  try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user?.email) return null;
+    
+    const userRecords = await db.select()
+      .from(users)
+      .where(eq(users.email, session.user.email))
+      .limit(1);
+    
+    return userRecords.length > 0 ? userRecords[0].role : null;
+  } catch (error) {
+    console.error('Error getting user role:', error);
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -150,6 +169,29 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // ✅ CRITICAL FIX: Check for duplicate phone number
+    const cleanPhone = phone.trim();
+    const existingLead = await db.select()
+      .from(leadsNew)
+      .where(eq(leadsNew.phone, cleanPhone))
+      .limit(1);
+
+    if (existingLead.length > 0) {
+      return NextResponse.json({
+        error: "Mobile number already exists",
+        code: "DUPLICATE_PHONE",
+        existingLead: {
+          id: existingLead[0].id,
+          name: existingLead[0].name,
+          email: existingLead[0].email,
+          leadStage: existingLead[0].leadStage,
+          leadStatus: existingLead[0].leadStatus,
+          assignedTelecallerId: existingLead[0].assignedTelecallerId,
+          createdAt: existingLead[0].createdAt
+        }
+      }, { status: 409 });
+    }
+
     // Validate enum values
     if (!VALID_LEAD_SOURCES.includes(leadSource)) {
       return NextResponse.json({ 
@@ -183,7 +225,7 @@ export async function POST(request: NextRequest) {
     // Prepare insert data
     const insertData: any = {
       name: name.trim(),
-      phone: phone.trim(),
+      phone: cleanPhone,
       leadSource: leadSource.trim(),
       leadStage: leadStage?.trim() || 'new',
       leadStatus: leadStatus?.trim() || 'active',
@@ -261,7 +303,26 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // ✅ CRITICAL FIX: Get user role for authorization
+    const userRole = await getUserRole(request);
+    
     const body = await request.json();
+    
+    // ✅ CRITICAL FIX: Field restrictions for telecallers
+    if (userRole === 'telecaller') {
+      const allowedFields = ['notes', 'leadStage'];
+      const providedFields = Object.keys(body);
+      const invalidFields = providedFields.filter(f => !allowedFields.includes(f));
+      
+      if (invalidFields.length > 0) {
+        return NextResponse.json({
+          error: `Telecallers can only update: ${allowedFields.join(', ')}`,
+          code: 'FIELD_RESTRICTION',
+          invalidFields
+        }, { status: 403 });
+      }
+    }
+
     const {
       name,
       email,
@@ -294,6 +355,30 @@ export async function PUT(request: NextRequest) {
         error: 'Lead not found',
         code: 'LEAD_NOT_FOUND' 
       }, { status: 404 });
+    }
+
+    // ✅ CRITICAL FIX: Check for duplicate phone if phone is being updated
+    if (phone !== undefined) {
+      const cleanPhone = phone.trim();
+      if (cleanPhone !== existingLead[0].phone) {
+        const duplicateCheck = await db.select()
+          .from(leadsNew)
+          .where(eq(leadsNew.phone, cleanPhone))
+          .limit(1);
+
+        if (duplicateCheck.length > 0 && duplicateCheck[0].id !== parseInt(id)) {
+          return NextResponse.json({
+            error: "Mobile number already exists",
+            code: "DUPLICATE_PHONE",
+            existingLead: {
+              id: duplicateCheck[0].id,
+              name: duplicateCheck[0].name,
+              email: duplicateCheck[0].email,
+              leadStage: duplicateCheck[0].leadStage
+            }
+          }, { status: 409 });
+        }
+      }
     }
 
     // Validate enum values if provided
@@ -445,6 +530,16 @@ export async function DELETE(request: NextRequest) {
         error: "Valid ID is required",
         code: "INVALID_ID" 
       }, { status: 400 });
+    }
+
+    // ✅ CRITICAL FIX: Check user role authorization
+    const userRole = await getUserRole(request);
+    
+    if (!['admin', 'super_admin'].includes(userRole || '')) {
+      return NextResponse.json({
+        error: 'Unauthorized. Only admins can delete leads.',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      }, { status: 403 });
     }
 
     // Check if lead exists

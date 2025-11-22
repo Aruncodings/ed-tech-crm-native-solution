@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Phone, MessageSquare, Search, Loader2, LogOut, ChevronRight, Filter } from "lucide-react";
+import { Phone, MessageSquare, Search, Loader2, LogOut, ChevronRight, Filter, ArrowRight } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/toast";
 
 interface Lead {
   id: number;
@@ -46,6 +47,9 @@ export default function TelecallerPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [userId, setUserId] = useState<number | null>(null);
   
+  // ✅ NEW: Next Lead state
+  const [nextLeadIndex, setNextLeadIndex] = useState(0);
+  
   // Call dialog state
   const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -63,7 +67,6 @@ export default function TelecallerPage() {
     }
 
     if (session?.user?.email) {
-      // Fetch user ID and verify role
       fetch(`/api/users?search=${encodeURIComponent(session.user.email)}`)
         .then((res) => res.json())
         .then((data) => {
@@ -81,7 +84,6 @@ export default function TelecallerPage() {
         })
         .catch(() => setIsLoading(false));
       
-      // Fetch courses
       fetch("/api/courses-new")
         .then((res) => res.json())
         .then(setCourses)
@@ -102,12 +104,35 @@ export default function TelecallerPage() {
 
       const response = await fetch(`/api/leads-new/my-leads?${params}`);
       const data = await response.json();
-      setLeads(data);
+      
+      // ✅ CRITICAL FIX: Sort leads by priority
+      const sortedLeads = sortLeadsByPriority(data);
+      setLeads(sortedLeads);
+      setNextLeadIndex(0); // Reset to first lead
     } catch (error) {
       console.error("Error fetching leads:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ✅ CRITICAL FIX: Priority sorting for leads
+  const sortLeadsByPriority = (leadsArray: Lead[]) => {
+    return [...leadsArray].sort((a, b) => {
+      // Priority 1: New leads first
+      if (a.leadStage === 'new' && b.leadStage !== 'new') return -1;
+      if (a.leadStage !== 'new' && b.leadStage === 'new') return 1;
+      
+      // Priority 2: Contacted but not converted
+      const activeStages = ['contacted', 'qualified', 'demo_scheduled', 'proposal_sent', 'negotiation'];
+      const aIsActive = activeStages.includes(a.leadStage);
+      const bIsActive = activeStages.includes(b.leadStage);
+      if (aIsActive && !bIsActive) return -1;
+      if (!aIsActive && bIsActive) return 1;
+      
+      // Priority 3: By creation date (older first)
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
   };
 
   const handleSignOut = async () => {
@@ -129,6 +154,29 @@ export default function TelecallerPage() {
     setNextFollowup("");
     setNewLeadStage(lead.leadStage);
     setIsCallDialogOpen(true);
+  };
+
+  // ✅ CRITICAL FIX: Next Lead functionality
+  const handleNextLead = () => {
+    const filtered = filteredLeads;
+    if (filtered.length === 0) {
+      toast.error("No leads available");
+      return;
+    }
+    
+    const nextIndex = (nextLeadIndex + 1) % filtered.length;
+    setNextLeadIndex(nextIndex);
+    openCallDialog(filtered[nextIndex]);
+  };
+
+  const handleCallAndNext = async () => {
+    // First save the call
+    await handleSubmitCall();
+    
+    // Then automatically open next lead
+    setTimeout(() => {
+      handleNextLead();
+    }, 500);
   };
 
   const handleSubmitCall = async () => {
@@ -155,11 +203,16 @@ export default function TelecallerPage() {
       });
 
       if (response.ok) {
+        toast.success("Call logged successfully");
         setIsCallDialogOpen(false);
         if (userId) fetchLeads(userId);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error("Error submitting call:", error);
+      toast.error("Failed to log call");
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -269,8 +322,19 @@ export default function TelecallerPage() {
         {/* Filters */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>My Leads</CardTitle>
-            <CardDescription>Manage and follow up with your assigned leads</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>My Leads</CardTitle>
+                <CardDescription>Manage and follow up with your assigned leads</CardDescription>
+              </div>
+              {/* ✅ CRITICAL FIX: Next Lead Button */}
+              {filteredLeads.length > 0 && (
+                <Button onClick={handleNextLead} size="lg" className="bg-primary">
+                  <ArrowRight className="mr-2 h-5 w-5" />
+                  Next Lead
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4">
@@ -319,16 +383,23 @@ export default function TelecallerPage() {
               <CardContent className="flex items-center justify-center py-12">
                 <div className="text-center">
                   <p className="text-muted-foreground">No leads found</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {stageFilter !== "all" ? "Try changing the filter" : "No leads assigned to you yet"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            filteredLeads.map((lead) => (
-              <Card key={lead.id} className="hover:border-primary/50 transition-colors">
+            filteredLeads.map((lead, index) => (
+              <Card key={lead.id} className={`hover:border-primary/50 transition-colors ${index === nextLeadIndex ? 'border-primary border-2' : ''}`}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
+                        {/* ✅ Show "Next" badge */}
+                        {index === nextLeadIndex && (
+                          <Badge className="bg-primary text-primary-foreground">Next</Badge>
+                        )}
                         <h3 className="text-lg font-semibold">{lead.name}</h3>
                         <Badge className={getStageColor(lead.leadStage)}>
                           {lead.leadStage.replace(/_/g, " ")}
@@ -465,7 +536,7 @@ export default function TelecallerPage() {
             <Button variant="outline" onClick={() => setIsCallDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmitCall} disabled={!callOutcome || isSubmitting}>
+            <Button onClick={handleSubmitCall} disabled={!callOutcome || isSubmitting} variant="secondary">
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -473,6 +544,20 @@ export default function TelecallerPage() {
                 </>
               ) : (
                 "Save Call Log"
+              )}
+            </Button>
+            {/* ✅ NEW: Save and Next Button */}
+            <Button onClick={handleCallAndNext} disabled={!callOutcome || isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="mr-2 h-4 w-4" />
+                  Save & Next Lead
+                </>
               )}
             </Button>
           </DialogFooter>
