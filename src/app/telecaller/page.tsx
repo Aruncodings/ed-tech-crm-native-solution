@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Phone, MessageSquare, Search, Loader2, LogOut, ChevronRight, Filter, ArrowRight } from "lucide-react";
+import { Phone, MessageSquare, Search, Loader2, LogOut, ChevronRight, Filter, ArrowRight, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,15 @@ interface Course {
   code: string;
 }
 
+interface DropdownOption {
+  id: number;
+  category: string;
+  value: string;
+  label: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
 export default function TelecallerPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
@@ -47,7 +56,13 @@ export default function TelecallerPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [userId, setUserId] = useState<number | null>(null);
   
-  // ✅ NEW: Next Lead state
+  // ✅ Real-time updates state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  
+  const [callOutcomeOptions, setCallOutcomeOptions] = useState<DropdownOption[]>([]);
+  const [leadStageOptions, setLeadStageOptions] = useState<DropdownOption[]>([]);
+  
   const [nextLeadIndex, setNextLeadIndex] = useState(0);
   
   // Call dialog state
@@ -88,10 +103,48 @@ export default function TelecallerPage() {
         .then((res) => res.json())
         .then(setCourses)
         .catch(console.error);
+        
+      fetchDropdownOptions();
     }
   }, [session, isPending, router]);
 
-  const fetchLeads = async (telecallerId: number) => {
+  // ✅ CRITICAL: Auto-refresh every 30 seconds for real-time updates
+  useEffect(() => {
+    if (!userId) return;
+    
+    const interval = setInterval(() => {
+      fetchLeads(userId, true);
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [userId]);
+
+  const fetchDropdownOptions = async () => {
+    try {
+      const [outcomeRes, stageRes] = await Promise.all([
+        fetch("/api/dropdown-master-new?category=call_outcome&isActive=true&limit=100"),
+        fetch("/api/dropdown-master-new?category=lead_stage&isActive=true&limit=100"),
+      ]);
+
+      const [outcomeData, stageData] = await Promise.all([
+        outcomeRes.json(),
+        stageRes.json(),
+      ]);
+
+      setCallOutcomeOptions(outcomeData);
+      setLeadStageOptions(stageData);
+    } catch (error) {
+      console.error("Error fetching dropdown options:", error);
+    }
+  };
+
+  const fetchLeads = async (telecallerId: number, isAutoRefresh = false) => {
+    if (!isAutoRefresh) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
     try {
       const params = new URLSearchParams({
         telecaller_id: telecallerId.toString(),
@@ -105,32 +158,29 @@ export default function TelecallerPage() {
       const response = await fetch(`/api/leads-new/my-leads?${params}`);
       const data = await response.json();
       
-      // ✅ CRITICAL FIX: Sort leads by priority
       const sortedLeads = sortLeadsByPriority(data);
       setLeads(sortedLeads);
-      setNextLeadIndex(0); // Reset to first lead
+      setNextLeadIndex(0);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching leads:", error);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
-  // ✅ CRITICAL FIX: Priority sorting for leads
   const sortLeadsByPriority = (leadsArray: Lead[]) => {
     return [...leadsArray].sort((a, b) => {
-      // Priority 1: New leads first
       if (a.leadStage === 'new' && b.leadStage !== 'new') return -1;
       if (a.leadStage !== 'new' && b.leadStage === 'new') return 1;
       
-      // Priority 2: Contacted but not converted
       const activeStages = ['contacted', 'qualified', 'demo_scheduled', 'proposal_sent', 'negotiation'];
       const aIsActive = activeStages.includes(a.leadStage);
       const bIsActive = activeStages.includes(b.leadStage);
       if (aIsActive && !bIsActive) return -1;
       if (!aIsActive && bIsActive) return 1;
       
-      // Priority 3: By creation date (older first)
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   };
@@ -144,6 +194,12 @@ export default function TelecallerPage() {
     });
     localStorage.removeItem("bearer_token");
     router.push("/");
+  };
+
+  const handleManualRefresh = () => {
+    if (userId) {
+      fetchLeads(userId, false);
+    }
   };
 
   const openCallDialog = (lead: Lead) => {
@@ -261,17 +317,36 @@ export default function TelecallerPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
+      {/* ✅ UPDATED: Header with real-time indicator */}
       <header className="sticky top-0 z-10 border-b bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div>
-            <h1 className="text-xl font-bold">Telecaller Workspace</h1>
-            <p className="text-sm text-muted-foreground">{session?.user?.name}</p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-xl font-bold">Telecaller Workspace</h1>
+              <p className="text-sm text-muted-foreground">{session?.user?.name}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>
+                {isRefreshing ? 'Updating...' : `Updated ${lastUpdated.toLocaleTimeString()}`}
+              </span>
+            </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleSignOut}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -325,9 +400,8 @@ export default function TelecallerPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>My Leads</CardTitle>
-                <CardDescription>Manage and follow up with your assigned leads</CardDescription>
+                <CardDescription>Manage and follow up with your assigned leads (Live Updates)</CardDescription>
               </div>
-              {/* ✅ CRITICAL FIX: Next Lead Button */}
               {filteredLeads.length > 0 && (
                 <Button onClick={handleNextLead} size="lg" className="bg-primary">
                   <ArrowRight className="mr-2 h-5 w-5" />
@@ -362,14 +436,11 @@ export default function TelecallerPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Stages</SelectItem>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="demo_scheduled">Demo Scheduled</SelectItem>
-                  <SelectItem value="proposal_sent">Proposal Sent</SelectItem>
-                  <SelectItem value="negotiation">Negotiation</SelectItem>
-                  <SelectItem value="converted">Converted</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
+                  {leadStageOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -396,7 +467,6 @@ export default function TelecallerPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        {/* ✅ Show "Next" badge */}
                         {index === nextLeadIndex && (
                           <Badge className="bg-primary text-primary-foreground">Next</Badge>
                         )}
@@ -470,13 +540,11 @@ export default function TelecallerPage() {
                   <SelectValue placeholder="Select outcome" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="answered">Answered</SelectItem>
-                  <SelectItem value="no_answer">No Answer</SelectItem>
-                  <SelectItem value="busy">Busy</SelectItem>
-                  <SelectItem value="callback_requested">Callback Requested</SelectItem>
-                  <SelectItem value="not_interested">Not Interested</SelectItem>
-                  <SelectItem value="interested">Interested</SelectItem>
-                  <SelectItem value="converted">Converted</SelectItem>
+                  {callOutcomeOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -488,14 +556,11 @@ export default function TelecallerPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="demo_scheduled">Demo Scheduled</SelectItem>
-                  <SelectItem value="proposal_sent">Proposal Sent</SelectItem>
-                  <SelectItem value="negotiation">Negotiation</SelectItem>
-                  <SelectItem value="converted">Converted</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
+                  {leadStageOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -546,7 +611,6 @@ export default function TelecallerPage() {
                 "Save Call Log"
               )}
             </Button>
-            {/* ✅ NEW: Save and Next Button */}
             <Button onClick={handleCallAndNext} disabled={!callOutcome || isSubmitting}>
               {isSubmitting ? (
                 <>

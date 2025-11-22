@@ -63,7 +63,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
+      {/* ✅ UPDATED: Simplified Header - No public login/register */}
       <header className="border-b border-border bg-card sticky top-0 z-50">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
@@ -102,20 +102,12 @@ export default function Home() {
                 </Link>
               </>
             ) : (
-              <>
-                <Link href="/setup-guide">
-                  <Button variant="ghost" size="sm">
-                    <BookOpen className="mr-2 h-4 w-4" />
-                    Setup Guide
-                  </Button>
-                </Link>
-                <Link
-                  href="/login"
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
-                >
-                  Login
-                </Link>
-              </>
+              <Link href="/login">
+                <Button variant="outline" size="sm">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Admin Login
+                </Button>
+              </Link>
             )}
           </nav>
         </div>
@@ -139,40 +131,34 @@ export default function Home() {
                 </Button>
               </Link>
             ) : (
-              <>
-                <Link href="/register">
-                  <Button size="lg">
-                    Get Started
-                  </Button>
-                </Link>
+              <div className="text-center">
+                <p className="text-muted-foreground mb-4">
+                  Access is restricted. Contact your administrator for credentials.
+                </p>
                 <Link href="/login">
-                  <Button variant="outline" size="lg">
-                    Sign In
+                  <Button size="lg">
+                    <Shield className="mr-2 h-5 w-5" />
+                    Administrator Access
                   </Button>
                 </Link>
-              </>
+              </div>
             )}
           </div>
           
-          {/* Approval Notice for New Users */}
+          {/* ✅ UPDATED: Access Notice */}
           {!session?.user && (
             <div className="mt-6 mx-auto max-w-2xl">
-              <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+              <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <div className="flex items-center justify-center gap-2 mb-2">
-                  <Shield className="h-5 w-5 text-purple-600" />
-                  <p className="font-semibold text-purple-800 dark:text-purple-200">
-                    First Time Setup Required
+                  <Shield className="h-5 w-5 text-blue-600" />
+                  <p className="font-semibold text-blue-800 dark:text-blue-200">
+                    Secure Access System
                   </p>
                 </div>
-                <p className="text-sm text-purple-700 dark:text-purple-300 mb-3">
-                  All accounts require Super Admin approval. First-time users need to set up a Super Admin account.
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  This is a private CRM system. All user accounts are created and managed by administrators. 
+                  Telecallers and staff members will receive login credentials from their admin.
                 </p>
-                <Link href="/setup-guide">
-                  <Button size="sm" variant="outline" className="border-purple-500/30 text-purple-700 hover:bg-purple-500/10">
-                    <BookOpen className="mr-2 h-4 w-4" />
-                    View Setup Guide
-                  </Button>
-                </Link>
               </div>
             </div>
           )}
@@ -200,23 +186,23 @@ export default function Home() {
             
             <div className="rounded-lg border border-border bg-card p-6">
               <TrendingUp className="mb-4 h-12 w-12 text-primary" />
-              <h4 className="mb-2 text-xl font-semibold">Analytics Dashboard</h4>
+              <h4 className="mb-2 text-xl font-semibold">Real-Time Analytics</h4>
               <p className="text-muted-foreground">
-                Real-time insights and performance metrics for your team
+                Live insights and performance metrics with auto-refresh
               </p>
             </div>
             
             <div className="rounded-lg border border-border bg-card p-6">
               <FileSpreadsheet className="mb-4 h-12 w-12 text-primary" />
-              <h4 className="mb-2 text-xl font-semibold">Import/Export</h4>
+              <h4 className="mb-2 text-xl font-semibold">Excel Import</h4>
               <p className="text-muted-foreground">
-                Bulk lead management with Excel/CSV support and field mapping
+                Bulk lead import with duplicate detection and validation
               </p>
             </div>
           </div>
         </section>
 
-        {/* Role-Based Access with Super Admin Highlight */}
+        {/* Role-Based Access */}
         <section className="bg-muted/50 py-16">
           <div className="container mx-auto px-4">
             <h3 className="mb-4 text-center text-3xl font-bold">Role-Based Access Control</h3>
@@ -240,14 +226,14 @@ export default function Home() {
                 <Users className="h-8 w-8 text-blue-600 mx-auto mb-3" />
                 <h4 className="mb-2 text-lg font-semibold">Admin</h4>
                 <p className="text-sm text-muted-foreground">
-                  Operations manager with full analytics and reporting
+                  Full access to analytics, import, and data management
                 </p>
               </div>
               <div className="rounded-lg bg-card p-6 text-center border">
                 <Phone className="h-8 w-8 text-green-600 mx-auto mb-3" />
                 <h4 className="mb-2 text-lg font-semibold">Telecallers</h4>
                 <p className="text-sm text-muted-foreground">
-                  Focused interface for calls and lead updates
+                  Call leads one-by-one and update call logs
                 </p>
               </div>
               <div className="rounded-lg bg-card p-6 text-center border">

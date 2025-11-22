@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useSession, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, LogOut, Users, Phone, TrendingUp, Award, UserPlus, FileSpreadsheet, Settings, List } from "lucide-react";
+import { Loader2, LogOut, Users, Phone, TrendingUp, Award, UserPlus, FileSpreadsheet, Settings, List, Upload, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
 interface Stats {
@@ -25,6 +26,8 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -43,14 +46,43 @@ export default function AdminPage() {
               router.push("/dashboard");
               return;
             }
-            fetchStats();
-            fetchUsers();
-            fetchCourses();
+            fetchAllData();
           }
         })
         .catch(() => setIsLoading(false));
     }
   }, [session, isPending, router]);
+
+  // ✅ CRITICAL: Auto-refresh every 30 seconds for real-time updates
+  useEffect(() => {
+    if (!session?.user) return;
+    
+    const interval = setInterval(() => {
+      fetchAllData(true);
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [session]);
+
+  const fetchAllData = async (isAutoRefresh = false) => {
+    if (!isAutoRefresh) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    try {
+      await Promise.all([
+        fetchStats(),
+        fetchUsers(),
+        fetchCourses()
+      ]);
+      setLastUpdated(new Date());
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -59,8 +91,6 @@ export default function AdminPage() {
       setStats(data);
     } catch (error) {
       console.error("Error fetching stats:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -95,6 +125,10 @@ export default function AdminPage() {
     router.push("/");
   };
 
+  const handleManualRefresh = () => {
+    fetchAllData(false);
+  };
+
   if (isPending || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -105,22 +139,62 @@ export default function AdminPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
+      {/* ✅ UPDATED: Header with real-time indicator */}
       <header className="sticky top-0 z-10 border-b bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div>
-            <h1 className="text-xl font-bold">Admin Dashboard</h1>
-            <p className="text-sm text-muted-foreground">{session?.user?.name}</p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-xl font-bold">Admin Dashboard</h1>
+              <p className="text-sm text-muted-foreground">{session?.user?.name}</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>
+                {isRefreshing ? 'Updating...' : `Updated ${lastUpdated.toLocaleTimeString()}`}
+              </span>
+            </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleSignOut}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 py-6">
+        {/* ✅ CRITICAL: Prominent Import Button */}
+        <div className="mb-6 p-4 bg-primary/5 border-2 border-primary/20 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Upload className="h-5 w-5 text-primary" />
+                Bulk Lead Import
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Import leads from Excel/CSV files. Supports bulk upload with duplicate detection.
+              </p>
+            </div>
+            <Link href="/admin/leads">
+              <Button size="lg" className="bg-primary">
+                <Upload className="mr-2 h-5 w-5" />
+                Import Leads
+              </Button>
+            </Link>
+          </div>
+        </div>
+
         {/* Overview Stats */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card>
@@ -195,7 +269,7 @@ export default function AdminPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Lead Pipeline by Stage</CardTitle>
-                <CardDescription>Distribution of leads across different stages</CardDescription>
+                <CardDescription>Real-time distribution of leads across different stages</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -283,7 +357,7 @@ export default function AdminPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Team Members</CardTitle>
-                <CardDescription>User roles and activity status</CardDescription>
+                <CardDescription>User roles and activity status (Live)</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -392,7 +466,7 @@ export default function AdminPage() {
                   Manage Users
                 </Button>
               </Link>
-              <Link href="/super-admin">
+              <Link href="/admin/settings">
                 <Button variant="outline" className="w-full justify-start">
                   <Settings className="mr-2 h-4 w-4" />
                   System Settings
