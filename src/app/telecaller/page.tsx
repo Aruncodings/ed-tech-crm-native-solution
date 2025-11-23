@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Phone, MessageSquare, Search, Loader2, LogOut, ChevronRight, Filter, ArrowRight, RefreshCw } from "lucide-react";
+import { Phone, MessageSquare, Search, Loader2, LogOut, ArrowRight, RefreshCw, Download, AlertCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { CallStatsCard } from "@/components/telecaller/call-stats-card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Lead {
   id: number;
@@ -42,8 +44,19 @@ interface DropdownOption {
   category: string;
   value: string;
   label: string;
-  displayOrder: number;
-  isActive: boolean;
+}
+
+interface DailyStats {
+  callsMade: number;
+  callsAnswered: number;
+  totalDurationSeconds: number;
+  leadsContacted: number;
+  leadsConverted: number;
+}
+
+interface CallLimits {
+  dailyCallLimit: number;
+  monthlyCallLimit: number;
 }
 
 export default function TelecallerPage() {
@@ -56,7 +69,6 @@ export default function TelecallerPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [userId, setUserId] = useState<number | null>(null);
   
-  // ✅ Real-time updates state
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
@@ -75,6 +87,21 @@ export default function TelecallerPage() {
   const [newLeadStage, setNewLeadStage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Stats and limits
+  const [dailyStats, setDailyStats] = useState<DailyStats>({
+    callsMade: 0,
+    callsAnswered: 0,
+    totalDurationSeconds: 0,
+    leadsContacted: 0,
+    leadsConverted: 0,
+  });
+  const [callLimits, setCallLimits] = useState<CallLimits>({
+    dailyCallLimit: 0,
+    monthlyCallLimit: 0,
+  });
+  const [monthlyCallsMade, setMonthlyCallsMade] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
+
   useEffect(() => {
     if (!isPending && !session?.user) {
       router.push("/login?redirect=/telecaller");
@@ -92,7 +119,13 @@ export default function TelecallerPage() {
               return;
             }
             setUserId(user.id);
+            setCallLimits({
+              dailyCallLimit: user.dailyCallLimit || 0,
+              monthlyCallLimit: user.monthlyCallLimit || 0,
+            });
             fetchLeads(user.id);
+            fetchDailyStats(user.id);
+            fetchMonthlyStats(user.id);
           } else {
             setIsLoading(false);
           }
@@ -108,16 +141,55 @@ export default function TelecallerPage() {
     }
   }, [session, isPending, router]);
 
-  // ✅ CRITICAL: Auto-refresh every 30 seconds for real-time updates
   useEffect(() => {
     if (!userId) return;
     
     const interval = setInterval(() => {
       fetchLeads(userId, true);
-    }, 30000); // Refresh every 30 seconds
+      fetchDailyStats(userId);
+      fetchMonthlyStats(userId);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [userId]);
+
+  const fetchDailyStats = async (telecallerId: number) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/telecaller-stats/daily?telecallerId=${telecallerId}&date=${today}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setDailyStats({
+          callsMade: data.callsMade || 0,
+          callsAnswered: data.callsAnswered || 0,
+          totalDurationSeconds: data.totalDurationSeconds || 0,
+          leadsContacted: data.leadsContacted || 0,
+          leadsConverted: data.leadsConverted || 0,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching daily stats:", error);
+    }
+  };
+
+  const fetchMonthlyStats = async (telecallerId: number) => {
+    try {
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startDate = firstDay.toISOString().split('T')[0];
+      const endDate = now.toISOString().split('T')[0];
+      
+      const response = await fetch(`/api/telecaller-stats?telecallerId=${telecallerId}&startDate=${startDate}&endDate=${endDate}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setMonthlyCallsMade(data.totals?.callsMade || 0);
+      }
+    } catch (error) {
+      console.error("Error fetching monthly stats:", error);
+    }
+  };
 
   const fetchDropdownOptions = async () => {
     try {
@@ -199,10 +271,61 @@ export default function TelecallerPage() {
   const handleManualRefresh = () => {
     if (userId) {
       fetchLeads(userId, false);
+      fetchDailyStats(userId);
+      fetchMonthlyStats(userId);
+    }
+  };
+
+  const handleExportCallLogs = async () => {
+    if (!userId) return;
+    
+    setIsExporting(true);
+    try {
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startDate = firstDay.toISOString().split('T')[0];
+      const endDate = now.toISOString().split('T')[0];
+      
+      const response = await fetch(
+        `/api/call-logs-new/export?telecallerId=${userId}&startDate=${startDate}&endDate=${endDate}`
+      );
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `my_call_logs_${endDate}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        toast.success("Call logs exported successfully!");
+      } else {
+        toast.error("Failed to export call logs");
+      }
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export call logs");
+    } finally {
+      setIsExporting(false);
     }
   };
 
   const openCallDialog = (lead: Lead) => {
+    // Check daily limit
+    if (callLimits.dailyCallLimit > 0 && dailyStats.callsMade >= callLimits.dailyCallLimit) {
+      toast.error(`Daily call limit reached (${callLimits.dailyCallLimit} calls)`);
+      return;
+    }
+    
+    // Check monthly limit
+    if (callLimits.monthlyCallLimit > 0 && monthlyCallsMade >= callLimits.monthlyCallLimit) {
+      toast.error(`Monthly call limit reached (${callLimits.monthlyCallLimit} calls)`);
+      return;
+    }
+    
     setSelectedLead(lead);
     setCallOutcome("");
     setCallNotes("");
@@ -212,7 +335,6 @@ export default function TelecallerPage() {
     setIsCallDialogOpen(true);
   };
 
-  // ✅ CRITICAL FIX: Next Lead functionality
   const handleNextLead = () => {
     const filtered = filteredLeads;
     if (filtered.length === 0) {
@@ -220,23 +342,30 @@ export default function TelecallerPage() {
       return;
     }
     
-    const nextIndex = (nextLeadIndex + 1) % filtered.length;
-    setNextLeadIndex(nextIndex);
-    openCallDialog(filtered[nextIndex]);
+    const lead = filtered[nextLeadIndex];
+    openCallDialog(lead);
   };
 
   const handleCallAndNext = async () => {
-    // First save the call
-    await handleSubmitCall();
+    const success = await handleSubmitCall();
     
-    // Then automatically open next lead
-    setTimeout(() => {
-      handleNextLead();
-    }, 500);
+    if (success) {
+      setTimeout(() => {
+        const filtered = filteredLeads;
+        if (filtered.length > 0) {
+          const newIndex = (nextLeadIndex + 1) % filtered.length;
+          setNextLeadIndex(newIndex);
+          openCallDialog(filtered[newIndex]);
+        }
+      }, 500);
+    }
   };
 
   const handleSubmitCall = async () => {
-    if (!selectedLead || !userId || !callOutcome) return;
+    if (!selectedLead || !userId || !callOutcome) {
+      toast.error("Please fill in all required fields");
+      return false;
+    }
 
     setIsSubmitting(true);
 
@@ -249,10 +378,9 @@ export default function TelecallerPage() {
         callDurationSeconds: callDuration ? parseInt(callDuration) * 60 : null,
         nextFollowupDate: nextFollowup || null,
         notes: callNotes || null,
-        newLeadStage: newLeadStage !== selectedLead.leadStage ? newLeadStage : null,
       };
 
-      const response = await fetch("/api/call-logs-new/create-and-update-lead", {
+      const response = await fetch("/api/call-logs-new/track-call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -261,10 +389,19 @@ export default function TelecallerPage() {
       if (response.ok) {
         toast.success("Call logged successfully");
         setIsCallDialogOpen(false);
-        if (userId) fetchLeads(userId);
+        
+        // Refresh data
+        if (userId) {
+          fetchLeads(userId);
+          fetchDailyStats(userId);
+          fetchMonthlyStats(userId);
+        }
         return true;
+      } else {
+        const error = await response.json();
+        toast.error(error.error || "Failed to log call");
+        return false;
       }
-      return false;
     } catch (error) {
       console.error("Error submitting call:", error);
       toast.error("Failed to log call");
@@ -287,25 +424,7 @@ export default function TelecallerPage() {
     return matchesSearch;
   });
 
-  const getStageColor = (stage: string) => {
-    const colors: Record<string, string> = {
-      new: "bg-blue-500/10 text-blue-500",
-      contacted: "bg-yellow-500/10 text-yellow-500",
-      qualified: "bg-purple-500/10 text-purple-500",
-      demo_scheduled: "bg-indigo-500/10 text-indigo-500",
-      proposal_sent: "bg-orange-500/10 text-orange-500",
-      negotiation: "bg-pink-500/10 text-pink-500",
-      converted: "bg-green-500/10 text-green-500",
-      lost: "bg-red-500/10 text-red-500",
-    };
-    return colors[stage] || "bg-gray-500/10 text-gray-500";
-  };
-
-  const getCourseName = (courseId: number | null) => {
-    if (!courseId) return "Not specified";
-    const course = courses.find((c) => c.id === courseId);
-    return course?.name || "Unknown";
-  };
+  const limitWarning = callLimits.dailyCallLimit > 0 && dailyStats.callsMade >= callLimits.dailyCallLimit * 0.9;
 
   if (isPending || isLoading) {
     return (
@@ -317,7 +436,6 @@ export default function TelecallerPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* ✅ UPDATED: Header with real-time indicator */}
       <header className="sticky top-0 z-10 border-b bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
@@ -336,6 +454,19 @@ export default function TelecallerPage() {
             <Button 
               variant="outline" 
               size="sm" 
+              onClick={handleExportCallLogs}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Export My Calls
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
               onClick={handleManualRefresh}
               disabled={isRefreshing}
             >
@@ -350,57 +481,33 @@ export default function TelecallerPage() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 container mx-auto px-4 py-6">
+        {/* Call Limits Warning */}
+        {limitWarning && (
+          <Alert className="mb-6 border-yellow-500/50 bg-yellow-500/5">
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+              You're approaching your daily call limit ({dailyStats.callsMade}/{callLimits.dailyCallLimit} calls)
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4 mb-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Leads</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{leads.length}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">New Leads</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {leads.filter((l) => l.leadStage === "new").length}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Contacted</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {leads.filter((l) => l.leadStage === "contacted").length}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Converted</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {leads.filter((l) => l.leadStage === "converted").length}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="mb-6">
+          <CallStatsCard 
+            stats={dailyStats} 
+            limits={callLimits}
+            monthlyCallsMade={monthlyCallsMade}
+          />
         </div>
 
-        {/* Filters */}
+        {/* Leads Section */}
         <Card className="mb-6">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>My Leads</CardTitle>
-                <CardDescription>Manage and follow up with your assigned leads (Live Updates)</CardDescription>
+                <CardDescription>Call leads one-by-one and update call outcomes (Auto-refresh every 30s)</CardDescription>
               </div>
               {filteredLeads.length > 0 && (
                 <Button onClick={handleNextLead} size="lg" className="bg-primary">
@@ -411,7 +518,7 @@ export default function TelecallerPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4">
+            <div className="flex gap-4 mb-4">
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -431,7 +538,6 @@ export default function TelecallerPage() {
                 }
               }}>
                 <SelectTrigger className="w-48">
-                  <Filter className="mr-2 h-4 w-4" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -629,4 +735,24 @@ export default function TelecallerPage() {
       </Dialog>
     </div>
   );
+  
+  function getStageColor(stage: string) {
+    const colors: Record<string, string> = {
+      new: "bg-blue-500/10 text-blue-500",
+      contacted: "bg-yellow-500/10 text-yellow-500",
+      qualified: "bg-purple-500/10 text-purple-500",
+      demo_scheduled: "bg-indigo-500/10 text-indigo-500",
+      proposal_sent: "bg-orange-500/10 text-orange-500",
+      negotiation: "bg-pink-500/10 text-pink-500",
+      converted: "bg-green-500/10 text-green-500",
+      lost: "bg-red-500/10 text-red-500",
+    };
+    return colors[stage] || "bg-gray-500/10 text-gray-500";
+  }
+
+  function getCourseName(courseId: number | null) {
+    if (!courseId) return "Not specified";
+    const course = courses.find((c) => c.id === courseId);
+    return course?.name || "Unknown";
+  }
 }

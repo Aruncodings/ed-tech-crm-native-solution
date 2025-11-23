@@ -10,6 +10,8 @@ export const users = sqliteTable('users', {
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   isApproved: integer('is_approved', { mode: 'boolean' }).notNull().default(false),
   authUserId: text('auth_user_id'),
+  dailyCallLimit: integer('daily_call_limit').notNull().default(0), // New field: 0 = unlimited
+  monthlyCallLimit: integer('monthly_call_limit').notNull().default(0), // New field: 0 = unlimited
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
@@ -239,6 +241,19 @@ export const exportJobsNew = sqliteTable('export_jobs_new', {
   completedAt: text('completed_at'),
 });
 
+// New table: telecaller_call_stats - Track telecaller call statistics
+export const telecallerCallStats = sqliteTable('telecaller_call_stats', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  telecallerId: integer('telecaller_id').notNull().references(() => users.id),
+  date: text('date').notNull(), // Format: YYYY-MM-DD
+  callsMade: integer('calls_made').notNull().default(0),
+  callsAnswered: integer('calls_answered').notNull().default(0),
+  totalDurationSeconds: integer('total_duration_seconds').notNull().default(0),
+  leadsContacted: integer('leads_contacted').notNull().default(0),
+  leadsConverted: integer('leads_converted').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
 
 // Auth tables for better-auth
 export const user = sqliteTable("user", {

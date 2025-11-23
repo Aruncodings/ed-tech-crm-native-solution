@@ -6,8 +6,9 @@ import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Loader2, ArrowLeft, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Loader2, ArrowLeft, Edit, Trash2, Target } from "lucide-react";
 import { UserDialog } from "@/components/admin/user-dialog";
+import { CallLimitsDialog } from "@/components/admin/call-limits-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -31,6 +32,8 @@ interface User {
   role: string;
   isActive: boolean;
   isApproved: boolean;
+  dailyCallLimit: number;
+  monthlyCallLimit: number;
   createdAt: string;
 }
 
@@ -44,6 +47,7 @@ export default function AdminUsersPage() {
   
   // Dialog states
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [isCallLimitsDialogOpen, setIsCallLimitsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
@@ -89,6 +93,11 @@ export default function AdminUsersPage() {
   const handleEditUser = (user: User) => {
     setSelectedUser(user);
     setIsUserDialogOpen(true);
+  };
+
+  const handleSetCallLimits = (user: User) => {
+    setSelectedUser(user);
+    setIsCallLimitsDialogOpen(true);
   };
 
   const confirmDelete = async () => {
@@ -209,6 +218,16 @@ export default function AdminUsersPage() {
                           {user.phone && (
                             <p className="text-sm text-muted-foreground">📞 {user.phone}</p>
                           )}
+                          {user.role === "telecaller" && (
+                            <div className="mt-2 flex gap-3 text-xs">
+                              <span className="text-muted-foreground">
+                                Daily Limit: <strong>{user.dailyCallLimit === 0 ? "Unlimited" : user.dailyCallLimit}</strong>
+                              </span>
+                              <span className="text-muted-foreground">
+                                Monthly Limit: <strong>{user.monthlyCallLimit === 0 ? "Unlimited" : user.monthlyCallLimit}</strong>
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="flex flex-col gap-1 mr-4">
@@ -233,6 +252,16 @@ export default function AdminUsersPage() {
                               {user.isActive ? "Active" : "Inactive"}
                             </Badge>
                           </div>
+                          {user.role === "telecaller" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSetCallLimits(user)}
+                              title="Set Call Limits"
+                            >
+                              <Target className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -262,6 +291,13 @@ export default function AdminUsersPage() {
       <UserDialog
         open={isUserDialogOpen}
         onOpenChange={setIsUserDialogOpen}
+        user={selectedUser}
+        onSuccess={fetchUsers}
+      />
+      
+      <CallLimitsDialog
+        open={isCallLimitsDialogOpen}
+        onOpenChange={setIsCallLimitsDialogOpen}
         user={selectedUser}
         onSuccess={fetchUsers}
       />
