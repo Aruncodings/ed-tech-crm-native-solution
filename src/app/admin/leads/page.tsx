@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Filter, Upload, Download, Loader2, ArrowLeft } from "lucide-react";
+import { Plus, Search, Filter, Upload, Download, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 import { LeadDialog } from "@/components/admin/lead-dialog";
-import { ImportExportDialog } from "@/components/admin/import-export-dialog";
+import { ImportLeadsDialog } from "@/components/admin/ImportLeadsDialog";
+import { ExportLeadsDialog } from "@/components/admin/ExportLeadsDialog";
 import { LeadsTable } from "@/components/admin/leads-table";
 import Link from "next/link";
 
@@ -26,6 +27,7 @@ interface Lead {
   city: string | null;
   state: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export default function AdminLeadsPage() {
@@ -37,6 +39,8 @@ export default function AdminLeadsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
   // Dialog states
   const [isLeadDialogOpen, setIsLeadDialogOpen] = useState(false);
@@ -67,16 +71,35 @@ export default function AdminLeadsPage() {
     }
   }, [session, isPending, router]);
 
-  const fetchLeads = async () => {
+  // ✅ Auto-refresh every 30 seconds for real-time updates
+  useEffect(() => {
+    if (!session?.user) return;
+    
+    const interval = setInterval(() => {
+      fetchLeads(true);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [session]);
+
+  const fetchLeads = async (isAutoRefresh = false) => {
+    if (!isAutoRefresh) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
     try {
       const params = new URLSearchParams({ limit: "1000" });
       const response = await fetch(`/api/leads-new?${params}`);
       const data = await response.json();
       setLeads(data);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching leads:", error);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -102,6 +125,10 @@ export default function AdminLeadsPage() {
 
   const handleDeleteLead = (id: number) => {
     setLeads(leads.filter((lead) => lead.id !== id));
+  };
+
+  const handleManualRefresh = () => {
+    fetchLeads(false);
   };
 
   const filteredLeads = leads.filter((lead) => {
@@ -138,31 +165,81 @@ export default function AdminLeadsPage() {
             <h1 className="text-xl font-bold">Lead Management</h1>
             <p className="text-sm text-muted-foreground">{session?.user?.name}</p>
           </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>
+              {isRefreshing ? 'Updating...' : `Updated ${lastUpdated.toLocaleTimeString()}`}
+            </span>
+          </div>
         </div>
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-6">
+        {/* ✅ PROMINENT: Import/Export Section */}
+        <div className="mb-6 grid gap-4 md:grid-cols-2">
+          <Card className="border-2 border-primary/20 bg-primary/5">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Upload className="h-5 w-5 text-primary" />
+                    Import Leads
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Bulk upload from Excel/CSV with duplicate detection
+                  </p>
+                </div>
+                <Button size="lg" onClick={() => setIsImportDialogOpen(true)} className="bg-primary">
+                  <Upload className="mr-2 h-5 w-5" />
+                  Import
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 border-blue-500/20 bg-blue-500/5">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Download className="h-5 w-5 text-blue-600" />
+                    Export Leads
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Download all leads as Excel/CSV for analysis
+                  </p>
+                </div>
+                <Button size="lg" variant="outline" onClick={() => setIsExportDialogOpen(true)}>
+                  <Download className="mr-2 h-5 w-5" />
+                  Export
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>All Leads</CardTitle>
                 <CardDescription>
-                  Manage and track all leads in the system ({filteredLeads.length} total)
+                  Manage and track all leads in the system ({filteredLeads.length} total) - Auto-refreshes every 30s
                 </CardDescription>
               </div>
               <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
                 <Button onClick={handleCreateLead}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Lead
-                </Button>
-                <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import
-                </Button>
-                <Button variant="outline" onClick={() => setIsExportDialogOpen(true)}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
                 </Button>
               </div>
             </div>
@@ -232,17 +309,15 @@ export default function AdminLeadsPage() {
         lead={selectedLead}
         onSuccess={fetchLeads}
       />
-      <ImportExportDialog
+      <ImportLeadsDialog
         open={isImportDialogOpen}
         onOpenChange={setIsImportDialogOpen}
-        mode="import"
-        onSuccess={fetchLeads}
+        onImportComplete={fetchLeads}
       />
-      <ImportExportDialog
+      <ExportLeadsDialog
         open={isExportDialogOpen}
         onOpenChange={setIsExportDialogOpen}
-        mode="export"
-        onSuccess={() => {}}
+        totalLeads={filteredLeads.length}
       />
     </div>
   );
