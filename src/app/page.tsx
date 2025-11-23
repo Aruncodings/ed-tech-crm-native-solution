@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 export default function Home() {
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, refetch } = useSession();
   const router = useRouter();
   const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    if (session?.user?.email) {
+    if (session?.user?.email && !userRole) {
       fetch(`/api/users?search=${encodeURIComponent(session.user.email)}`)
         .then((res) => res.json())
         .then((data) => {
@@ -22,7 +22,7 @@ export default function Home() {
           }
         });
     }
-  }, [session]);
+  }, [session?.user?.email, userRole]);
 
   const handleSignOut = async () => {
     const token = localStorage.getItem("bearer_token");
@@ -36,8 +36,8 @@ export default function Home() {
     
     if (!error) {
       localStorage.removeItem("bearer_token");
+      refetch();
       router.push("/");
-      window.location.reload();
     }
   };
 
