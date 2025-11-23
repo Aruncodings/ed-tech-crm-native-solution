@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, LogIn, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { ForgotPasswordDialog } from "@/components/auth/forgot-password-dialog";
 
 function LoginForm() {
   const router = useRouter();
@@ -20,6 +21,7 @@ function LoginForm() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
@@ -52,7 +54,6 @@ function LoginForm() {
       if (!userResponse.ok) {
         setError("Failed to verify user status. Please try again.");
         setIsLoading(false);
-        // Sign out the user
         await authClient.signOut();
         return;
       }
@@ -73,7 +74,6 @@ function LoginForm() {
         setError("");
         toast.error("Your account is pending approval from the Super Admin. Please wait for approval before logging in.");
         setIsLoading(false);
-        // Sign out the user
         await authClient.signOut();
         localStorage.removeItem("bearer_token");
         return;
@@ -86,6 +86,23 @@ function LoginForm() {
         await authClient.signOut();
         localStorage.removeItem("bearer_token");
         return;
+      }
+
+      // Step 5: Check if user must change password
+      const passwordStatusResponse = await fetch("/api/auth/check-password-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.toLowerCase().trim() }),
+      });
+
+      if (passwordStatusResponse.ok) {
+        const passwordStatus = await passwordStatusResponse.json();
+        
+        if (passwordStatus.mustChangePassword) {
+          toast.info("Please change your password before continuing");
+          router.push("/change-password");
+          return;
+        }
       }
 
       // Success! Redirect based on role
@@ -123,94 +140,113 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex items-center justify-center mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-              <LogIn className="h-6 w-6 text-primary-foreground" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl text-center">Welcome Back</CardTitle>
-          <CardDescription className="text-center">
-            Sign in to your Ed-Tech CRM account
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && (
-              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>{error}</span>
+    <>
+      <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <div className="flex items-center justify-center mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+                <LogIn className="h-6 w-6 text-primary-foreground" />
               </div>
-            )}
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-                autoComplete="email"
-              />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                autoComplete="off"
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="remember"
-                checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                disabled={isLoading}
-              />
-              <label
-                htmlFor="remember"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Remember me
-              </label>
-            </div>
-          </CardContent>
-
-          <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
+            <CardTitle className="text-2xl text-center">Welcome Back</CardTitle>
+            <CardDescription className="text-center">
+              Sign in to your Ed-Tech CRM account
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
               )}
-            </Button>
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  autoComplete="email"
+                />
+              </div>
 
-            <div className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link href="/register" className="font-medium text-primary hover:underline">
-                Create an account
-              </Link>
-            </div>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                    disabled={isLoading}
+                  />
+                  <label
+                    htmlFor="remember"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Remember me
+                  </label>
+                </div>
+                
+                <Button
+                  type="button"
+                  variant="link"
+                  className="px-0 text-sm"
+                  onClick={() => setShowForgotPassword(true)}
+                  disabled={isLoading}
+                >
+                  Forgot password?
+                </Button>
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex flex-col space-y-4">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </Button>
+
+              <div className="text-center text-sm text-muted-foreground">
+                Don&apos;t have an account?{" "}
+                <Link href="/register" className="font-medium text-primary hover:underline">
+                  Create an account
+                </Link>
+              </div>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+
+      <ForgotPasswordDialog 
+        open={showForgotPassword} 
+        onOpenChange={setShowForgotPassword} 
+      />
+    </>
   );
 }
 

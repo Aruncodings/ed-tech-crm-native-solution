@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users } from '@/db/schema';
+import { users, user as betterAuthUser, account } from '@/db/schema';
 import { eq, like, or, and, desc } from 'drizzle-orm';
+import bcrypt from 'bcrypt';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
 const VALID_ROLES = ['super_admin', 'admin', 'telecaller', 'counselor', 'auditor'];
 
@@ -117,6 +120,31 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get current session for authorization
+    const session = await auth.api.getSession({ headers: await headers() });
+    
+    if (!session || !session.user?.email) {
+      return NextResponse.json(
+        { error: 'Authentication required', code: 'UNAUTHORIZED' },
+        { status: 401 }
+      );
+    }
+
+    // Get current user from users table
+    const currentUserRecords = await db.select()
+      .from(users)
+      .where(eq(users.email, session.user.email))
+      .limit(1);
+
+    if (currentUserRecords.length === 0) {
+      return NextResponse.json(
+        { error: 'Current user not found', code: 'CURRENT_USER_NOT_FOUND' },
+        { status: 404 }
+      );
+    }
+
+    const currentUser = currentUserRecords[0];
+
     const body = await request.json();
     const { email, name, role, phone, isActive } = body;
 
@@ -159,6 +187,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Authorization check for telecaller creation
+    if (role === 'telecaller') {
+      if (currentUser.role !== 'admin' && currentUser.role !== 'super_admin') {
+        return NextResponse.json(
+          { 
+            error: 'Only admins can create telecaller accounts',
+            code: 'INSUFFICIENT_PERMISSIONS'
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check email uniqueness
     const existingUser = await db
       .select()
@@ -181,11 +222,58 @@ export async function POST(request: NextRequest) {
       role: role.trim(),
       phone: phone ? phone.trim() : null,
       isActive: typeof isActive === 'boolean' ? isActive : true,
+      isApproved: role === 'telecaller' ? true : false,
+      mustChangePassword: true,
+      lastPasswordChange: null,
       createdAt: now,
       updatedAt: now,
     };
 
     const newUser = await db.insert(users).values(insertData).returning();
+
+    // Create better-auth user and account with default password for telecallers
+    if (role === 'telecaller') {
+      try {
+        // Create better-auth user
+        const newBetterAuthUser = await db.insert(betterAuthUser).values({
+          id: crypto.randomUUID(),
+          name: name.trim(),
+          email: sanitizedEmail,
+          emailVerified: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }).returning();
+
+        // Hash default password
+        const defaultPassword = 'Admin@123';
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+        // Create account with password
+        await db.insert(account).values({
+          id: crypto.randomUUID(),
+          accountId: newBetterAuthUser[0].id,
+          providerId: 'credential',
+          userId: newBetterAuthUser[0].id,
+          password: hashedPassword,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        // Update users table with authUserId
+        await db.update(users)
+          .set({ authUserId: newBetterAuthUser[0].id })
+          .where(eq(users.id, newUser[0].id));
+
+      } catch (authError) {
+        console.error('Error creating auth user for telecaller:', authError);
+        // Rollback user creation
+        await db.delete(users).where(eq(users.id, newUser[0].id));
+        return NextResponse.json(
+          { error: 'Failed to create authentication account', code: 'AUTH_CREATION_FAILED' },
+          { status: 500 }
+        );
+      }
+    }
 
     return NextResponse.json(newUser[0], { status: 201 });
   } catch (error) {

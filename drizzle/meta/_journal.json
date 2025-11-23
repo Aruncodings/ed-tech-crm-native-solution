@@ -36,6 +36,13 @@
       "when": 1763879228289,
       "tag": "0004_clammy_chronomancer",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1763880287416,
+      "tag": "0005_robust_wraith",
+      "breakpoints": true
     }
   ]
 }

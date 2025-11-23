@@ -12,6 +12,8 @@ export const users = sqliteTable('users', {
   authUserId: text('auth_user_id'),
   dailyCallLimit: integer('daily_call_limit').notNull().default(0), // New field: 0 = unlimited
   monthlyCallLimit: integer('monthly_call_limit').notNull().default(0), // New field: 0 = unlimited
+  mustChangePassword: integer('must_change_password', { mode: 'boolean' }).notNull().default(true),
+  lastPasswordChange: text('last_password_change'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
